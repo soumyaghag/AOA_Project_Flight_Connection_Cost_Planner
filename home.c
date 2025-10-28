@@ -1,105 +1,141 @@
 #include <stdio.h>
 #include <limits.h>
 
-// Structure to store one flight connection
-// src = source city, dest = destination city, weight = flight cost
-struct Edge {
-    int src, dest, weight;
-};
+#define MAXV 100    // max number of vertices (cities)
+#define MAXE 1000   // max number of directed edges (flight connections)
 
-// Function to find the cheapest flight cost using Bellman-Ford Algorithm
-void BellmanFord(struct Edge edges[], int V, int E, int src) {
-    int dist[V];  // dist[] array stores the minimum cost to reach each city
-    
-    // Step 1: Initialize distances
-    // Initially, set all city distances to infinity (INT_MAX)
-    // The source city distance is 0 (distance from itself is zero)
-    for (int i = 0; i < V; i++)
-        dist[i] = INT_MAX;
-    dist[src] = 0;
+// Forward-star adjacency list storage
+int head[MAXV];
+int to[MAXE];
+int wght[MAXE];
+int nxt[MAXE];
+int edgeIdx = 0;
 
-    // Step 2: Relax all edges |V| - 1 times
-    // Relaxing means updating the shortest known distance if a cheaper route is found
-    // Repeat (V-1) times because the shortest path can have at most (V-1) edges
-    for (int i = 1; i <= V - 1; i++) {
-        for (int j = 0; j < E; j++) {
-            int u = edges[j].src;
-            int v = edges[j].dest;
-            int weight = edges[j].weight;
+int V, E;
 
-            // If there is a shorter path to v through u, update it
-            if (dist[u] != INT_MAX && dist[u] + weight < dist[v])
-                dist[v] = dist[u] + weight;
+// DFS state
+int visited[MAXV];
+int path[MAXV];
+int pathCount;
+int bestPath[MAXV];
+int bestPathCount;
+int bestCost;
+
+// Add directed edge u -> v with weight wt
+void addEdge(int u, int v, int wt) {
+    to[edgeIdx] = v;
+    wght[edgeIdx] = wt;
+    nxt[edgeIdx] = head[u];
+    head[u] = edgeIdx;
+    edgeIdx++;
+}
+
+// Print one route stored in path[]
+void printRoute(int length, int cost) {
+    for (int i = 0; i < length; i++) {
+        if (i) printf(" ");
+        printf("%d", path[i]);
+    }
+    printf(" (Cost = %d)\n", cost);
+}
+
+// DFS exploring all paths from current to destination
+void dfs(int current, int destination, int currentCost) {
+    if (current == destination) {
+        // print this complete route
+        printRoute(pathCount, currentCost);
+
+        // update best if cheaper
+        if (currentCost < bestCost) {
+            bestCost = currentCost;
+            bestPathCount = pathCount;
+            for (int i = 0; i < pathCount; i++)
+                bestPath[i] = path[i];
         }
+        return;
     }
 
-    // Step 3: Check for negative weight cycle
-    // If we can still relax an edge, that means a negative cycle exists
-    for (int j = 0; j < E; j++) {
-        int u = edges[j].src;
-        int v = edges[j].dest;
-        int weight = edges[j].weight;
-        if (dist[u] != INT_MAX && dist[u] + weight < dist[v]) {
-            printf("\n⚠ Graph contains a negative weight cycle!\n");
-            return;
+    visited[current] = 1;
+
+    // iterate over all outgoing edges from 'current'
+    for (int ei = head[current]; ei != -1; ei = nxt[ei]) {
+        int nextNode = to[ei];
+        int edgeWeight = wght[ei];
+
+        if (!visited[nextNode]) {
+            // push and explore
+            path[pathCount++] = nextNode;
+            dfs(nextNode, destination, currentCost + edgeWeight);
+            pathCount--;
         }
+        // Note: if nextNode is already visited, we skip to avoid cycles.
+        // This still allows multiple parallel edges to the same unvisited node to be explored,
+        // because after returning from dfs the visited[nextNode] will be cleared.
     }
 
-    // Step 4: Print the result table
-    printf("\n📍 Cheapest Flight Costs from Source City %d:\n", src);
-    printf("----------------------------------------\n");
-
-    int cheapestCity = -1;   // Variable to store city with the cheapest flight
-    int cheapestCost = INT_MAX;
-
-    // Print cost from source to every other city
-    for (int i = 0; i < V; i++) {
-        if (dist[i] == INT_MAX)
-            printf("City %d -> City %d : No Connection\n", src, i);
-        else {
-            printf("City %d -> City %d : %d\n", src, i, dist[i]);
-
-            // Update cheapest city if a lower cost is found
-            if (i != src && dist[i] < cheapestCost) {
-                cheapestCost = dist[i];
-                cheapestCity = i;
-            }
-        }
-    }
-
-    // Step 5: Display the cheapest available flight
-    if (cheapestCity != -1)
-        printf("\n✅ Cheapest flight is from City %d to City %d with cost %d.\n",
-               src, cheapestCity, cheapestCost);
-    else
-        printf("\nNo reachable city found from source.\n");
+    visited[current] = 0;
 }
 
 int main() {
-    int V, E, src;
-
-    // Step 1: Take input for number of cities and flight connections
     printf("Enter number of cities: ");
-    scanf("%d", &V);
+    if (scanf("%d", &V) != 1) return 0;
 
     printf("Enter number of flight connections: ");
-    scanf("%d", &E);
+    if (scanf("%d", &E) != 1) return 0;
 
-    struct Edge edges[E]; // Array to store all flight connections
+    // initialize adjacency list
+    for (int i = 0; i < V; i++) head[i] = -1;
+    edgeIdx = 0;
 
-    // Step 2: Input each flight connection data (Source, Destination, Cost)
     printf("\nEnter each flight connection (Source Destination Cost):\n");
     for (int i = 0; i < E; i++) {
+        int s, d, wt;
         printf("Connection %d: ", i + 1);
-        scanf("%d %d %d", &edges[i].src, &edges[i].dest, &edges[i].weight);
+        if (scanf("%d %d %d", &s, &d, &wt) != 3) return 0;
+        if (s < 0 || s >= V || d < 0 || d >= V) {
+            printf("Invalid city index. Cities are 0 .. %d\n", V - 1);
+            return 0;
+        }
+        addEdge(s, d, wt);
     }
 
-    // Step 3: Input the source city (starting point)
+    int src;
     printf("\nEnter source city: ");
-    scanf("%d", &src);
+    if (scanf("%d", &src) != 1) return 0;
+    if (src < 0 || src >= V) {
+        printf("Invalid source city index.\n");
+        return 0;
+    }
 
-    // Step 4: Call the Bellman-Ford function to calculate the cheapest flight costs
-    BellmanFord(edges, V, E, src);
+    // For every destination, run DFS from src to dest and list all routes + shortest
+    for (int dest = 0; dest < V; dest++) {
+        if (dest == src) continue;
+
+        printf("\n====================================================\n");
+        printf("All Possible Routes from City %d to City %d:\n\n", src, dest);
+
+        // reset DFS/best state
+        bestCost = INT_MAX;
+        bestPathCount = 0;
+        pathCount = 0;
+        for (int i = 0; i < V; i++) visited[i] = 0;
+
+        // start path with source
+        path[pathCount++] = src;
+
+        dfs(src, dest, 0);
+
+        if (bestCost == INT_MAX) {
+            printf("\nNo route available.\n");
+        } else {
+            printf("\n✅ Shortest Route: ");
+            for (int i = 0; i < bestPathCount; i++) {
+                if (i) printf(" ");
+                printf("%d", bestPath[i]);
+            }
+            printf(" (Cost = %d)\n", bestCost);
+        }
+    }
 
     return 0;
 }
